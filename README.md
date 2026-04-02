@@ -13,7 +13,7 @@ A real dApp frontend built on **GenLayer Testnet Studionet** for the **Aleph Hac
 
 ## Deployed Contract
 
-- **Address:** `0x2A067E5e39528fA027F40b8f8FC377f0c83F87B2`
+- **Address:** `0x4Da6D68a1401A8CD9B7eD109013b43c19c75f79F`
 - **Network:** GenLayer Testnet Studionet (Chain ID: 61999)
 - **RPC:** `https://studio.genlayer.com/api`
 
