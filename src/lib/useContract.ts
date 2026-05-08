@@ -15,10 +15,32 @@ export interface Job {
   freelancer: string;
   deliverable: string;
   escrow_amount: string;
+  escrow_amount_wei: string;
   status: string;
   verdict: string;
   verdict_reasoning: string;
   match_percentage?: number;
+  paid_to: string;
+  payment_tx: string;
+}
+
+const NATIVE_TOKEN_DECIMALS = 18;
+
+function parseGenAmount(amount: string): bigint {
+  const trimmed = amount.trim();
+  if (!/^\d+(\.\d{1,18})?$/.test(trimmed)) {
+    throw new Error("Enter a valid GEN amount with up to 18 decimals");
+  }
+
+  const [whole, fraction = ""] = trimmed.split(".");
+  const paddedFraction = fraction.padEnd(NATIVE_TOKEN_DECIMALS, "0");
+  const wei = BigInt(whole) * BigInt(10) ** BigInt(NATIVE_TOKEN_DECIMALS) + BigInt(paddedFraction);
+
+  if (wei <= BigInt(0)) {
+    throw new Error("Escrow amount must be greater than 0 GEN");
+  }
+
+  return wei;
 }
 
 export function useContract(
@@ -86,7 +108,7 @@ export function useContract(
   // ---------- WRITE METHODS ----------
 
   const writeTx = useCallback(
-    async (functionName: string, args: any[]): Promise<string | null> => {
+    async (functionName: string, args: any[], value: bigint = BigInt(0)): Promise<string | null> => {
       if (!address || !provider) {
         setError("Wallet not connected");
         return null;
@@ -141,7 +163,7 @@ export function useContract(
           address: CONTRACT_ADDRESS as `0x${string}`,
           functionName,
           args,
-          value: BigInt(0),
+          value,
         });
 
         setTxHash(hash);
@@ -168,23 +190,29 @@ export function useContract(
 
   const createJob = useCallback(
     async (title: string, description: string, escrowAmount: string) => {
-      return writeTx("create_job", [title, description, address || "", escrowAmount]);
+      try {
+        const escrowValue = parseGenAmount(escrowAmount);
+        return writeTx("create_job", [title, description, escrowAmount], escrowValue);
+      } catch (err: any) {
+        setError(err.message || "Invalid escrow amount");
+        return null;
+      }
     },
-    [writeTx, address]
+    [writeTx]
   );
 
   const cancelJob = useCallback(
     async (jobId: string) => {
-      return writeTx("cancel_job", [jobId, address || ""]);
+      return writeTx("cancel_job", [jobId]);
     },
-    [writeTx, address]
+    [writeTx]
   );
 
   const acceptJob = useCallback(
     async (jobId: string) => {
-      return writeTx("accept_job", [jobId, address || ""]);
+      return writeTx("accept_job", [jobId]);
     },
-    [writeTx, address]
+    [writeTx]
   );
 
   const submitDeliverable = useCallback(

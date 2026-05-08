@@ -4,12 +4,12 @@ A real dApp frontend built on **GenLayer Testnet Studionet** for the **Aleph Hac
 
 ## What it does
 
-1. **Client creates a job** with a description
-2. **Freelancer accepts** and does the work
-3. **Freelancer submits** a deliverable description
-4. **Client can approve** (instant release) OR **dispute**
-5. **If disputed**, AI validators judge: does the deliverable match the job?
-6. **AI verdict** releases funds to freelancer OR refunds client
+1. **Client creates a job** with a description and sends native GEN as transaction value
+2. **Contract escrows the GEN** in the PayGuard contract balance and records the exact wei amount
+3. **Freelancer accepts** and does the work
+4. **Freelancer submits** a deliverable description
+5. **Client can approve** to release escrow OR **dispute** for AI arbitration
+6. **AI verdict** releases GEN to the freelancer or refunds GEN to the client
 
 ## Deployed Contract
 
@@ -63,8 +63,8 @@ const writeClient = createClient({
 const txHash = await writeClient.writeContract({
   address: CONTRACT_ADDRESS,
   functionName: "create_job",
-  args: [title, description, walletAddress],
-  value: BigInt(0),
+  args: [title, description, escrowAmount],
+  value: escrowAmountWei, // native GEN sent into contract escrow
 });
 const receipt = await readClient.waitForTransactionReceipt({
   hash: txHash,
@@ -92,14 +92,27 @@ src/
 
 | Method | Type | Description |
 |--------|------|-------------|
-| `create_job(title, description, client_address)` | write | Create a new job |
-| `accept_job(job_id, freelancer_address)` | write | Accept an open job |
-| `submit_deliverable(job_id, deliverable)` | write | Submit completed work |
-| `approve_delivery(job_id)` | write | Client approves delivery |
-| `raise_dispute(job_id, client_complaint)` | write | Trigger AI arbitration |
+| `create_job(title, description, escrow_amount)` | payable write | Create a job and lock the attached native GEN value in escrow |
+| `cancel_job(job_id)` | write | Client cancels an open job and receives an escrow refund |
+| `accept_job(job_id)` | write | Accept an open job as the freelancer wallet |
+| `submit_deliverable(job_id, deliverable)` | write | Assigned freelancer submits completed work |
+| `approve_delivery(job_id)` | write | Client approves delivery and releases escrow to freelancer |
+| `raise_dispute(job_id, client_complaint)` | write | Trigger AI arbitration and release/refund escrow based on verdict |
 | `get_job(job_id)` | view | Get single job |
 | `get_all_jobs()` | view | Get all jobs |
 | `get_stats()` | view | Get job count |
+
+
+## Escrow implementation
+
+PayGuard now uses GenLayer native value transfers instead of only storing a display string:
+
+- `create_job` is decorated with `@gl.public.write.payable` and requires `gl.message.value > 0`.
+- The contract records both the human display amount and the exact `escrow_amount_wei`.
+- `cancel_job` refunds the client while the job is still open.
+- `approve_delivery` releases the full escrow to the assigned freelancer.
+- `raise_dispute` runs AI arbitration, then releases escrow to the freelancer for a `FREELANCER` verdict or refunds the client for a `CLIENT` verdict.
+- The frontend sends the GEN amount as `value` in the `create_job` transaction and shows whether funds are held, released, or refunded.
 
 ## Deploy to Vercel
 

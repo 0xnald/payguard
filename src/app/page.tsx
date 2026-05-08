@@ -327,12 +327,13 @@ function CreateJobView({
               placeholder="e.g. 100"
               type="number"
               min="0"
+              step="0.000000000000000001"
               className="w-full px-4 py-3 rounded-lg border border-black/10 text-sm bg-white/80 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition pr-16"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">GEN</span>
           </div>
           <p className="text-xs text-gray-400 mt-1.5">
-            Amount held in escrow until the job is approved or dispute is resolved.
+            This exact GEN amount is sent with the transaction and held by the contract until approval, cancellation, or dispute resolution.
           </p>
         </div>
 
@@ -429,7 +430,7 @@ function JobDetailView({
         <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">Description</div>
         <p className="text-sm text-gray-600 leading-relaxed mb-4">{job.description}</p>
 
-        <div className="flex gap-8 text-xs">
+        <div className="flex gap-8 text-xs mb-4">
           <div>
             <span className="text-gray-400">Client: </span>
             <span className={`font-mono text-[11px] ${isClient ? "text-brand-600 font-semibold" : ""}`}>
@@ -441,6 +442,18 @@ function JobDetailView({
             <span className={`font-mono text-[11px] ${isFreelancer ? "text-brand-600 font-semibold" : ""}`}>
               {job.freelancer || "—"} {isFreelancer && "(you)"}
             </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="rounded-lg bg-brand-50 border border-brand-100 px-3 py-2">
+            <div className="text-[10px] font-semibold text-brand-700 uppercase tracking-wide">Escrow</div>
+            <div className="font-semibold text-brand-900">{job.escrow_amount} GEN locked on-chain</div>
+          </div>
+          <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+            <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Payment State</div>
+            <div className="font-semibold text-gray-700">{job.payment_tx || "HELD_IN_CONTRACT"}</div>
+            {job.paid_to && <div className="font-mono text-[10px] text-gray-400 truncate">to {job.paid_to}</div>}
           </div>
         </div>
       </div>
