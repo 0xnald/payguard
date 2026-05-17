@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 
-const STUDIONET_CHAIN_ID = "0xF23F"; // 61999 in hex
+const STUDIONET_CHAIN_ID = "0xF22F"; // 61999 in hex
 
 const STUDIONET_CHAIN_CONFIG = {
   chainId: STUDIONET_CHAIN_ID,
@@ -63,6 +63,18 @@ export function useWallet() {
 
   const switchToStudionet = useCallback(async () => {
     if (!window.ethereum) return;
+
+    try {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [STUDIONET_CHAIN_CONFIG],
+      });
+    } catch (addError: any) {
+      if (addError.code !== -32602 && addError.code !== 4902) {
+        console.warn("Studionet network add/update skipped:", addError);
+      }
+    }
+
     try {
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",

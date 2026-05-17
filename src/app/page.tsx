@@ -4,6 +4,21 @@ import { useState, useEffect, useCallback } from "react";
 import { useWallet } from "@/lib/useWallet";
 import { useContract, Job } from "@/lib/useContract";
 import { CONTRACT_ADDRESS, FAUCET_URL, EXPLORER_URL } from "@/lib/genlayer";
+const WEI_PER_GEN = BigInt("1000000000000000000");
+
+function formatGenAmount(amount?: string) {
+  if (!amount) return "";
+
+  try {
+    const wei = BigInt(amount);
+    const whole = wei / WEI_PER_GEN;
+    const fraction = (wei % WEI_PER_GEN).toString().padStart(18, "0").replace(/0+$/, "");
+    const trimmedFraction = fraction.slice(0, 6);
+    return trimmedFraction ? `${whole}.${trimmedFraction}` : whole.toString();
+  } catch {
+    return amount;
+  }
+}
 
 // ============================================================================
 // STATUS BADGE
@@ -243,7 +258,7 @@ function DashboardView({
                 <StatusBadge status={job.status} />
                 {job.escrow_amount && (
                   <span className="px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">
-                    {job.escrow_amount} GEN
+                    {formatGenAmount(job.escrow_amount)} GEN
                   </span>
                 )}
               </div>
@@ -272,7 +287,7 @@ function CreateJobView({
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [escrowAmount, setEscrowAmount] = useState("");
+  const [escrowAmount, setEscrowAmount] = useState("0.001");
 
   const handleSubmit = async () => {
     if (!title.trim() || !description.trim() || !escrowAmount.trim()) return;
@@ -324,15 +339,16 @@ function CreateJobView({
             <input
               value={escrowAmount}
               onChange={(e) => setEscrowAmount(e.target.value)}
-              placeholder="e.g. 100"
+              placeholder="e.g. 0.001"
               type="number"
-              min="0"
+              min="0.000000000000000001"
+              step="0.001"
               className="w-full px-4 py-3 rounded-lg border border-black/10 text-sm bg-white/80 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition pr-16"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-semibold">GEN</span>
           </div>
           <p className="text-xs text-gray-400 mt-1.5">
-            Amount held in escrow until the job is approved or dispute is resolved.
+            Studionet gas is zero. This amount is the escrow deposit that will be locked for the job.
           </p>
         </div>
 
@@ -419,7 +435,7 @@ function JobDetailView({
           <div className="flex items-center gap-2">
             {job.escrow_amount && (
               <span className="px-3 py-1 rounded-full bg-brand-50 border border-brand-100 text-brand-700 text-xs font-bold">
-                🔒 {job.escrow_amount} GEN
+                🔒 {formatGenAmount(job.escrow_amount)} GEN
               </span>
             )}
             <StatusBadge status={job.status} />
@@ -560,7 +576,7 @@ function JobDetailView({
           </div>
           <p className="text-xs text-gray-400 mb-4">
             The freelancer has submitted their work above. Approve to release the{" "}
-            <strong>{job.escrow_amount} GEN</strong> escrow, or raise a dispute for AI arbitration.
+            <strong>{formatGenAmount(job.escrow_amount)} GEN</strong> escrow, or raise a dispute for AI arbitration.
           </p>
 
           <div className="flex gap-3 mb-4">

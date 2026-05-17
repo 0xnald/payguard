@@ -7,6 +7,32 @@ import {
   CONTRACT_ADDRESS,
 } from "./genlayer";
 
+const WEI_PER_GEN = BigInt("1000000000000000000");
+const STUDIONET_CHAIN_CONFIG = {
+  chainId: "0xF22F",
+  chainName: "GenLayer Studionet",
+  nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
+  rpcUrls: ["https://studio.genlayer.com/api"],
+  blockExplorerUrls: ["https://explorer-studio.genlayer.com"],
+};
+
+function parseGenToWei(amount: string): bigint {
+  const trimmed = amount.trim();
+  if (!/^\d+(\.\d{1,18})?$/.test(trimmed)) {
+    throw new Error("Enter a valid GEN amount with up to 18 decimals");
+  }
+
+  const [whole, fraction = ""] = trimmed.split(".");
+  const paddedFraction = fraction.padEnd(18, "0");
+  const wei = BigInt(whole) * WEI_PER_GEN + BigInt(paddedFraction);
+
+  if (wei <= BigInt(0)) {
+    throw new Error("Escrow amount must be greater than 0 GEN");
+  }
+
+  return wei;
+}
+
 export interface Job {
   id: string;
   title: string;
@@ -15,6 +41,9 @@ export interface Job {
   freelancer: string;
   deliverable: string;
   escrow_amount: string;
+  escrow_label?: string;
+  escrow_released?: boolean;
+  escrow_status?: string;
   status: string;
   verdict: string;
   verdict_reasoning: string;
@@ -68,7 +97,7 @@ export function useContract(
     }
   }, []);
 
-  const getStats = useCallback(async (): Promise<{ total_jobs: number }> => {
+  const getStats = useCallback(async (): Promise<{ total_jobs: number; contract_balance?: string }> => {
     try {
       const result = await readClient.readContract({
         address: CONTRACT_ADDRESS as `0x${string}`,
@@ -86,7 +115,7 @@ export function useContract(
   // ---------- WRITE METHODS ----------
 
   const writeTx = useCallback(
-    async (functionName: string, args: any[]): Promise<string | null> => {
+    async (functionName: string, args: any[], value: bigint = BigInt(0)): Promise<string | null> => {
       if (!address || !provider) {
         setError("Wallet not connected");
         return null;
@@ -97,31 +126,33 @@ export function useContract(
       setTxHash(null);
 
       try {
-        // Ensure MetaMask is on the Studionet chain before sending.
-        // If it's on a different chain it uses that chain's gas price.
         const eth = (window as any).ethereum;
+        try {
+          await eth.request({
+            method: "wallet_addEthereumChain",
+            params: [STUDIONET_CHAIN_CONFIG],
+          });
+        } catch (addErr: any) {
+          if (addErr.code !== -32602 && addErr.code !== 4902) {
+            console.warn("Studionet network add/update skipped:", addErr);
+          }
+        }
+
         try {
           await eth.request({
             method: "wallet_switchEthereumChain",
             params: [{ chainId: "0xF22F" }], // 61999 in hex
           });
         } catch (switchErr: any) {
-          // 4902 = chain not added yet — add it first, then it auto-switches
           if (switchErr.code === 4902) {
             try {
               await eth.request({
                 method: "wallet_addEthereumChain",
                 params: [{
-                  chainId: "0xF22F",
-                  chainName: "GenLayer Studionet",
-                  nativeCurrency: { name: "GEN", symbol: "GEN", decimals: 18 },
-                  rpcUrls: ["https://studio.genlayer.com/api"],
-                  blockExplorerUrls: ["https://explorer-studio.genlayer.com"],
+                  ...STUDIONET_CHAIN_CONFIG,
                 }],
               });
             } catch (addErr: any) {
-              // MetaMask may say "already exists" even after returning 4902 on
-              // switch — in that case just retry the switch directly.
               await eth.request({
                 method: "wallet_switchEthereumChain",
                 params: [{ chainId: "0xF22F" }],
@@ -141,13 +172,12 @@ export function useContract(
           address: CONTRACT_ADDRESS as `0x${string}`,
           functionName,
           args,
-          value: BigInt(0),
+          value,
         });
 
         setTxHash(hash);
 
-        // Wait for acceptance — use retries since studionet can be slow
-        const receipt = await readClient.waitForTransactionReceipt({
+        await readClient.waitForTransactionReceipt({
           hash,
           status: "ACCEPTED" as any,
           retries: 30,
@@ -168,7 +198,13 @@ export function useContract(
 
   const createJob = useCallback(
     async (title: string, description: string, escrowAmount: string) => {
-      return writeTx("create_job", [title, description, address || "", escrowAmount]);
+      try {
+        const escrowValue = parseGenToWei(escrowAmount);
+        return writeTx("create_job", [title, description, address || "", escrowAmount], escrowValue);
+      } catch (err: any) {
+        setError(err.message || "Invalid escrow amount");
+        return null;
+      }
     },
     [writeTx, address]
   );
@@ -209,22 +245,18 @@ export function useContract(
   );
 
   return {
-    // State
     loading,
     txHash,
     error,
-    // Reads
     getJob,
     getAllJobs,
     getStats,
-    // Writes
     createJob,
     cancelJob,
     acceptJob,
     submitDeliverable,
     approveDelivery,
     raiseDispute,
-    // Reset
     clearError: () => setError(null),
   };
 }
